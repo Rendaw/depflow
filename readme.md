@@ -1,8 +1,8 @@
 [![Build Status](https://circleci.com/gh/Rendaw/depflow.svg?style=svg)](https://circleci.com/gh/Rendaw/depflow)
 
-# What
+# What is depflow?
 
-Depflow is a library for building pipelined processes where individual steps can be conditionally omitted.  The traditional use case is building software.
+While you can think of depflow as a build system like `make` or `tup` it's implementation and use are a bit different.  Suppose you have a Python script that performs some process.  Using depflow you can easily skip parts of the process when rerunning if their inputs haven't changed.  depflow is a library which can be integrated with multiple workflows.  depflow defines an interface for creating new dependency types (`check`s) such as api responses, program output, and dates.  Like `make` and `tup`, you can use it for assembling software, but for large projects that are primarily filesystem based I'd recommend `tup` instead of this.
 
 Here is an example process using Plumbum:
 
@@ -38,10 +38,6 @@ Run
 ```
 pip install depflow
 ```
-
-# Why
-
-Existing build systems generally take a framework approach and are geared around file system changes.  Depflow is a Python library (and an extremely simple one) so it can be embedded in other software such as command line tools and scripts.  It was designed to easily mix file system and non file system dependencies such as API endpoint responses or docker image hashes.
 
 # Reference
 
