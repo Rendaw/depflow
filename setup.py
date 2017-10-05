@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='depflow',
-    version='0.0.1',
+    version='0.0.2,
     author='rendaw',
     url='https://github.com/rendaw/depflow',
     license='BSD',
