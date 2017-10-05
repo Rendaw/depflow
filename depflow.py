@@ -145,7 +145,7 @@ def file_hash(path):
 def _tree(path, depth, ignore, start, update, finish):
     ignore = [
         re.compile(pattern) if isinstance(pattern, str) else pattern
-        for pattern in ignore
+        for pattern in ignore or []
     ]
     if not path.endswith('/'):
         path = path + '/'
@@ -155,7 +155,7 @@ def _tree(path, depth, ignore, start, update, finish):
             break
         for file in files:
             full_file = os.path.join(root, file)
-            if any(pattern.find(full_file) for pattern in ignore):
+            if any(pattern.search(full_file) for pattern in ignore):
                 continue
             state = update(state, full_file)
     return (path, depth), finish(state)
