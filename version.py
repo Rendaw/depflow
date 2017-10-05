@@ -13,7 +13,11 @@ if not re.match('\\d+\\.\\d+\\.\\d+', args.version):
     args.error('version must be in the format N.N.N')
 subprocess.check_call([
     'sed',
-    '-e', 's/\\(version=\'\\)[[:digit:]]\\+\\.[[:digit:]]\\+\\.[[:digit:]]\\+\\(\'\\)/\\1{}\2/g'.format(  # noqa
+    '-e',
+    's'
+    '/\\(version=\'\\)[[:digit:]]\\+\\.[[:digit:]]\\+\\.[[:digit:]]\\+\\(\'\\)'
+    '/\\1{}\\2'
+    '/g'.format(
         args.version
     ),
     '-i',
