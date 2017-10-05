@@ -1,4 +1,4 @@
-[![Build Status](https://snap-ci.com/andrewbaxter/depflow/branch/master/build_image)](https://snap-ci.com/andrewbaxter/depflow/branch/master)
+[![Build Status](https://circleci.com/gh/Rendaw/depflow.svg?style=svg)](https://circleci.com/gh/Rendaw/depflow)
 
 #What
 
