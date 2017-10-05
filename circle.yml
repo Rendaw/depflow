@@ -1,0 +1,6 @@
+dependencies:
+  pre:
+    - pip install plumbum==1.6.3
+test:
+  override:
+    - python -m unittest discover
