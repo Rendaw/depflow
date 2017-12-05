@@ -7,7 +7,7 @@ Run
 
 # Defining a process
 
-Instantiate the flow with `depflow.Depflow()`.  Define steps in the process as nullary functions decorated with `@depflow.depends(*dependencies)`.  Dependencies can either be other steps or checks such as `depflow.file(path)` and `depflow.file_hash(path)`.  Steps are run as they are defined.
+Instantiate the flow with `flow = depflow.Depflow()`.  Define steps in the process as nullary functions decorated with `@flow.depends(dep1, dep2, ...)`.  Dependencies can either be other steps or checks such as `depflow.file(path)` and `depflow.file_hash(path)`.  Steps are run as they are defined.
 
 # Creating new checks
 

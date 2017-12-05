@@ -40,7 +40,3 @@ subprocess.check_call([
     '--tags',
     '-f',
 ])
-subprocess.check_call(['git', 'checkout', 'gh-pages'])
-subprocess.check_call(['git', 'reset', '--hard', 'master'])
-subprocess.check_call(['git', 'push', '-f'])
-subprocess.check_call(['git', 'checkout', 'master'])
