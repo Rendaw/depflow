@@ -12,7 +12,7 @@ Run
 
 # Defining a process
 
-Instantiate the flow with `depfl..." />
+Instantiate the flow with `flow ..." />
 
   <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,300' rel='stylesheet' type='text/css'>
   
@@ -1098,7 +1098,7 @@ table {
 
 
 <h1>Defining a process</h1>
-<p>Instantiate the flow with <code>depflow.Depflow()</code>.  Define steps in the process as nullary functions decorated with <code>@depflow.depends(*dependencies)</code>.  Dependencies can either be other steps or checks such as <code>depflow.file(path)</code> and <code>depflow.file_hash(path)</code>.  Steps are run as they are defined.</p>
+<p>Instantiate the flow with <code>flow = depflow.Depflow()</code>.  Define steps in the process as nullary functions decorated with <code>@flow.depends(dep1, dep2, ...)</code>.  Dependencies can either be other steps or checks such as <code>depflow.file(path)</code> and <code>depflow.file_hash(path)</code>.  Steps are run as they are defined.</p>
 <h1>Creating new checks</h1>
 <p>Depflow accounts for two different types of dependency checks.</p>
 <h3>Cached checks</h3>
@@ -1144,6 +1144,7 @@ def server_down(uri):
     return uri, not is_server_up(uri)
 
 @flow.depends(server_down(&#39;http://server1/state&#39;)):
+def server1_up():
     start_server(&#39;server1&#39;)
 </pre></div>
   
