@@ -24,25 +24,23 @@ subprocess.check_call([
     'setup.py',
 ])
 subprocess.call([
-    'git',
-    'commit',
+    'git', 'commit',
     '-a',
     '-m', 'VERSION {}'.format(args.version),
 ])
 subprocess.check_call([
-    'git',
-    'tag',
+    'git', 'tag',
     '-a', 'v{}'.format(args.version),
     '-m', 'v{}'.format(args.version),
     '-f',
 ])
+subprocess.check_call(['git', 'push'])
 subprocess.check_call([
-    'git',
-    'push',
-])
-subprocess.check_call([
-    'git',
-    'push',
+    'git', 'push',
     '--tags',
     '-f',
 ])
+subprocess.check_call(['git', 'checkout', 'gh-pages'])
+subprocess.check_call(['git', 'reset', '--hard', 'master'])
+subprocess.check_call(['git', 'push', '-f'])
+subprocess.check_call(['git', 'checkout', 'master'])

@@ -60,6 +60,7 @@ Example:
         return uri, not is_server_up(uri)
 
     @flow.depends(server_down('http://server1/state')):
+    def server1_up():
         start_server('server1')
 
 '''

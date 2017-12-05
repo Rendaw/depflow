@@ -1,6 +1,6 @@
 [![Build Status](https://circleci.com/gh/Rendaw/depflow.svg?style=svg)](https://circleci.com/gh/Rendaw/depflow)
 
-[Documentation here](depflow.m.html)
+[Documentation here](https://rendaw.github.io/depflow/depflow.m.html)
 
 # What is depflow?
 
