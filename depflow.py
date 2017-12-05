@@ -1,113 +1,290 @@
+'''
+# Installation
+
+Run
+
+    pip install depflow
+
+# Defining a process
+
+Instantiate the flow with `depflow.Depflow()`.  Define steps in the process as nullary functions decorated with `@depflow.depends(*dependencies)`.  Dependencies can either be other steps or checks such as `depflow.file(path)` and `depflow.file_hash(path)`.  Steps are run as they are defined.
+
+# Creating new checks
+
+Depflow accounts for two different types of dependency checks.
+
+### Cached checks
+
+Use `@depflow.check` to decorate a function that returns a value representing the state of some resource, where a dependent step only needs to be updated if the state of the resource changes.
+
+Example:
+
+    @depflow.check
+    def kernel_version():
+        return 'kernel-version', subprocess.check_output('uname -r')
+
+or to account for command line arguments:
+
+    flow = depflow.Depflow()
+    parser = argparse.ArgumentParser()
+    ...
+    args = parser.parse_args()
+
+    @depflow.check
+    def args_hash(*keys):
+        cs = hashlib.md5()
+        for k in keys:
+            cs.update(str(getattr(args, k)))
+        return keys, cs.hexdigest()
+
+    @flow.depends(arg_hash('output_dir', 'author'))
+    def step_a():
+        build_file('a.dat', args.output_dir, author=args.author)
+
+    @flow.depends(arg_hash('output_dir'))
+    def step_b():
+        build_file('b.dat', args.output_dir, author='system')
+
+Cached state is stored and compared based on a unique id generated from the first return value, the step name and the ids of its other dependencies.
+
+### Uncached checks
+
+Use `@depflow.raw_check` to decorate a function that returns a boolean indicating that the dependent step needs to be updated.
+
+Example:
+
+    flow = depflow.Depflow()
+
+    @flow.raw_check
+    def server_down(uri):
+        return uri, not is_server_up(uri)
+
+    @flow.depends(server_down('http://server1/state')):
+        start_server('server1')
+
+'''
 import logging
 import os
 import time
 import random
 from hashlib import md5
 import json
+import json.scanner
+import json.decoder
 import sqlite3
 import re
+import abc
+from functools import wraps
 
-logger = logging.getLogger('depflow')
-
-_db_name = os.environ.get('DEPFLOW_CACHE', '.depflow.sqlite3')
-_db = sqlite3.connect(_db_name)
-logger.debug('Using cache at {}'.format(os.path.abspath(_db_name)))
-_db.execute('create table if not exists keyvalue (key text primary key, value text not null)')  # noqa
-_db.commit()
 
 _random = random.SystemRandom()
 
 
-def _db_get(key):
-    out = _db.execute(
-        'select value from keyvalue where key = ?', (key,)).fetchone()
-    if out is None:
-        return None
-    return out[0]
+def _coerce_tuple(v):
+    if isinstance(v, list):
+        return tuple(v)
+    if isinstance(v, tuple):
+        return v
+    return (v,)
 
 
-def _db_set(key, value):
-    _db.execute(
-        'insert or replace into keyvalue (key, value) values (?, ?)',
-        (key, value))
-    _db.commit()
+def _parse_array(*pargs, **kwargs):
+    values, end = json.decoder.JSONArray(*pargs, **kwargs)
+    return tuple(values), end
 
 
-def depends(*nodes):
-    '''
-    Runs the wrapped function if any dependency has changed.
+class _TupleDecoder(json.JSONDecoder):
+    def __init__(self, *pargs, **kwargs):
+        super().__init__(*pargs, **kwargs)
+        self.parse_array = _parse_array
+        self.scan_once = json.scanner.py_make_scanner(self)
 
-    Dependency nodes can be either other functions wrapped with depends or
-    checks.
-    '''
-    def wrap_function(function):
-        class _Rule(object):
-            def __init__(self):
-                self._unique = '{} {}'.format(
-                    function.__name__,
-                    md5(''.join(
-                            node.unique() for node in nodes
-                        ).encode('utf-8')).hexdigest())
-                self._changed = any(node.changed(self) for node in nodes)
-                if self._changed:
-                    logger.info('Running {}'.format(function.__name__))
-                    function()
-                    self._invocation = json.dumps([
-                        int(time.time() * 1000),
-                        _random.random()])
-                    _db_set(self._unique, self._invocation)
-                    for node in nodes:
-                        node.commit_changed(self)
-                else:
-                    self._invocation = _db_get(self._unique)
 
-            def unique(self):
-                return self._unique
+def _loads(string):
+    return json.loads(string, cls=_TupleDecoder)
 
-            def changed(self, base):
-                k = json.dumps([self._unique, base.unique()])
-                return _db_get(k) != self._invocation
 
-            def commit_changed(self, base):
-                k = json.dumps([self._unique, base.unique()])
-                _db_set(k, self._invocation)
+class Dependency(abc.ABC):
+    @abc.abstractmethod
+    def unique(self, depflow):
+        '''A unique identifier for this dependency.'''
+        pass
 
-        return _Rule()
-    return wrap_function
+    @abc.abstractmethod
+    def changed(self, step):
+        '''
+        Return true if the current state of this dependency does not
+        match the previous state of the dependency relative to the step.
+        '''
+        pass
+
+    @abc.abstractmethod
+    def commit_changed(self, step):
+        '''
+        Persist the new state of this dependency relative to the step.
+        '''
+        pass
+
+
+class Step(Dependency):
+    def __init__(self, depflow, function, nodes, qualification):
+        self.depflow = depflow
+        self._unique = (
+            qualification,
+            function.__name__,
+            tuple(node.unique(depflow) for node in nodes)
+        )
+        self._changed = any(node.changed(self) for node in nodes)
+        if self._changed:
+            depflow._logger.info('Running {}'.format(function.__name__))
+            function()
+            self._invocation = (int(time.time() * 1000), _random.random())
+            depflow._db_set(self._unique, self._invocation)
+            for node in nodes:
+                node.commit_changed(self)
+        else:
+            self._invocation = depflow._db_get(self._unique)
+
+    def unique(self, depflow):
+        return self._unique
+
+    def changed(self, step):
+        return (
+            self.depflow._db_get((self._unique, step.unique(self.depflow))) !=
+            self._invocation
+        )
+
+    def commit_changed(self, step):
+        self.depflow._db_set(
+            (self._unique, step.unique(self.depflow)),
+            self._invocation
+        )
+
+
+class Scope(object):
+    def __init__(self, parent, qualification):
+        self.parent = parent
+        self.qualification = qualification
+
+    def depends(self, *nodes, qualification=None):
+        return self.parent.depends(
+            *nodes,
+            qualification=self.qualification + (qualification or ()))
+
+    def scope(self, *qualification):
+        return Scope(self, qualification)
+
+
+class Depflow(object):
+    def __init__(self, name='depflow'):
+        '''
+        (opt) `name` is the name of the flow.  This is used in logging
+        and persisting the state of various checks are stored between runs in
+        a database at `.{name}.sqlite3`.  The database filename can also be
+        overridden with the environment variable `DEPFLOW_CACHE`.
+        '''
+        self._logger = logging.getLogger(name)
+        _db_name = os.environ.get('DEPFLOW_CACHE', '.{}.sqlite3'.format(name))
+        self._db = sqlite3.connect(_db_name)
+        self._logger.debug(
+            'Using cache at {}'.format(os.path.abspath(_db_name)))
+        self._db.execute('create table if not exists keyvalue (key text primary key, value text not null)')  # noqa
+        self._db.commit()
+
+    def _db_get(self, key):
+        key = json.dumps(key)
+        out = self._db.execute(
+            'select value from keyvalue where key = ?', (key,)).fetchone()
+        if out is None:
+            return None
+        return _loads(out[0])
+
+    def _db_set(self, key, value):
+        key = json.dumps(key)
+        value = json.dumps(value)
+        self._db.execute(
+            'insert or replace into keyvalue (key, value) values (?, ?)',
+            (key, value))
+        self._db.commit()
+
+    def depends(self, *nodes, qualification=None):
+        '''
+        Runs the wrapped function if any dependency node has changed.
+
+        Dependency `nodes` can be either other functions wrapped with depends
+        or checks.
+
+        When the step is used as a dependency for another step the function
+        name is used to identify the state of this step.  If you have multiple
+        steps with the same function name, you need to either specify
+        the optional parameter `qualification` (as tuples and primitives)
+        or use a `scope`.
+        '''
+        def wrap_function(function):
+            return Step(self, function, nodes, qualification)
+        return wrap_function
+
+    def scope(self, *qualification):
+        '''
+        Returns a new scope with the specified `qualification`.  Scopes
+        support all the same methods as `Depflow` but decorated steps
+        will automatically receive these qualifications.
+
+        Calling `scope` on a scope results in a new scope with the combined
+        qualifications.
+        '''
+        return Scope(self, qualification)
+
+
+_UNEVALUATED = ()
 
 
 def check(function):
     '''
-    Converts a function that returns a key, value into a function that can be
-    used as a dependency.
+    Converts a function that returns a (key, value) into a Dependency.
 
-    The key should be a unique id for the object being checked.
-    The value should be a value representing the state of the object.  If the
-    value changes compared to a previous invocation, the dependant method will
-    run.
+    The key is a unique id for the object being checked.  It is composed
+    from tuples and primitives.
+
+    The value represents the state of the object.  It is composed from tuples
+    and primitives.  If the value changes compared to a previous invocation,
+    the dependant method will run.
+
+    ### Arguments
+
+    `function` is the function to decorate.
     '''
+    @wraps(function)
     def inner(*pargs, **kwargs):
-        k, v = function(*pargs, **kwargs)
-        if not isinstance(k, (list, tuple)):
-            k = (k,)
-        k = json.dumps((function.__name__,) + k)
-        v = str(v)
-        logger.debug('Cached check: {}, {}'.format(repr(k), repr(v)))
+        class _Check(Dependency):
+            def __init__(self):
+                self.k = _UNEVALUATED
+                self.v = None
 
-        class _Check(object):
-            def unique(self):
-                return k
+            def evaluate(self, depflow):
+                if self.k is not _UNEVALUATED:
+                    return
+                self.k, self.v = function(*pargs, **kwargs)
+                self.k = (function.__name__,) + _coerce_tuple(self.k)
+                depflow._logger.debug(
+                    'Cached check: {}, {}'.format(self.k, self.v))
 
-            def changed(self, base):
-                k2 = json.dumps([k, base.unique()])
-                v_old = _db_get(k2)
-                if v == v_old:
+            def unique(self, depflow):
+                self.evaluate(depflow)
+                return self.k
+
+            def changed(self, step):
+                self.evaluate(step.depflow)
+                k = (self.k, step.unique(step.depflow))
+                v_old = step.depflow._db_get(k)
+                if self.v == v_old:
                     return False
                 return True
 
-            def commit_changed(self, base):
-                k2 = json.dumps([k, base.unique()])
-                _db_set(k2, v)
+            def commit_changed(self, step):
+                self.evaluate(step.depflow)
+                k = (self.k, step.unique(step.depflow))
+                step.depflow._db_set(k, self.v)
 
         return _Check()
     return inner
@@ -115,7 +292,13 @@ def check(function):
 
 @check
 def file(path):
-    '''Check for changes in a single file by timestamp.'''
+    '''
+    Check for changes in a single file by timestamp.
+
+    ### Arguments
+
+    `path` The path of the file.
+    '''
     try:
         return path, int(os.path.getmtime(path) * 1000)
     except FileNotFoundError:
@@ -133,7 +316,13 @@ def _update_hash(path, cs):
 
 @check
 def file_hash(path):
-    '''Check for changes in a single file by hash.'''
+    '''
+    Check for changes in a single file by hash.
+
+    ### Arguments
+
+    `path` The path of the file.
+    '''
     cs = md5()
     try:
         _update_hash(path, cs)
@@ -166,11 +355,15 @@ def tree(path, depth=0, ignore=None):
     '''
     Check for changes in a file tree by timestamp.
 
-    depth indicates how many levels to descend into the path. 0 is unlimited,
+    ### Arguments
+
+    `path` is the path of the root of the tree.
+
+    (opt) `depth` indicates how many levels to descend into the path. 0 is unlimited,
     1 is only the specified directory itself, 2 would include the first
     children, etc.
 
-    ignore is a list of file and directory patterns to ignore.  Each pattern
+    (opt) `ignore` is a list of file and directory patterns to ignore.  Each pattern
     is a compiled regex applied against the file path from the tree root.
     '''
     return _tree(
@@ -188,11 +381,15 @@ def tree_hash(path, depth=0, ignore=None):
     '''
     Check for changes in a file tree by hash.
 
-    depth indicates how many levels to descend into the path. 0 is unlimited,
+    ### Arguments
+
+    `path` is the path of the root of the tree.
+
+    (opt) `depth` indicates how many levels to descend into the path. 0 is unlimited,
     1 is only the specified directory itself, 2 would include the first
     children, etc.
 
-    ignore is a list of file and directory patterns to ignore.  Each pattern
+    (opt) `ignore` is a list of file and directory patterns to ignore.  Each pattern
     is a compiled regex applied against the file path from the tree root.
     '''
     return _tree(
@@ -207,27 +404,44 @@ def tree_hash(path, depth=0, ignore=None):
 
 def raw_check(function):
     '''
-    Converts a function that returns a key, value into a function that can be
-    used as a dependency.
+    Decorator that converts a function that returns a `(key, value)` into a
+    dependency.
 
-    The key should be a unique id for the object being checked.
-    The value should be True if the dependant function should run.
+    The `key` is a unique id for the object being checked.  It is composed
+    from tuples and primitives.
+
+    The `value` is True if the dependent should be updated, False otherwise.
+
+    ### Arguments
+
+    `function` is the function to decorate.
     '''
+    @wraps(function)
     def inner(*pargs, **kwargs):
-        k, v = function(*pargs, **kwargs)
-        if not isinstance(k, (list, tuple)):
-            k = (k,)
-        k = json.dumps((function.__name__,) + k)
-        logger.debug('Raw check: {}, {}'.format(repr(k), repr(v)))
 
-        class _Check(object):
-            def unique(self):
-                return k
+        class _Check(Dependency):
+            def __init__(self):
+                self.k = _UNEVALUATED
+                self.v = None
 
-            def changed(self, base):
-                return v
+            def evaluate(self, depflow):
+                if self.k is not _UNEVALUATED:
+                    return
+                self.k, self.v = function(*pargs, **kwargs)
+                self.k = (function.__name__,) + _coerce_tuple(self.k)
+                depflow._logger.debug(
+                    'Raw check: {}, {}'.format(self.k, self.v))
 
-            def commit_changed(self, base):
+            def unique(self, depflow):
+                self.evaluate(depflow)
+                return self.k
+
+            def changed(self, step):
+                self.evaluate(step.depflow)
+                return self.v
+
+            def commit_changed(self, step):
+                self.evaluate(step.depflow)
                 pass
 
         return _Check()
@@ -236,5 +450,21 @@ def raw_check(function):
 
 @raw_check
 def nofile(path):
-    '''Check if a file does not exist.'''
+    '''
+    Run the step if the specified file doesn't exist.
+
+    ### Arguments
+
+    `path` is the path of the file.
+    '''
     return path, not os.path.exists(path)
+
+
+__all__ = (
+    'Depflow',
+    'check',
+    'raw_check',
+    'file', 'file_hash',
+    'tree', 'tree_hash',
+    'nofile',
+)

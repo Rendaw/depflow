@@ -1,165 +1,16 @@
-import os
 import unittest
 import time
-try:
-    from importlib import reload
-except ImportError:
-    pass
 import logging
-
-logging.basicConfig(level=logging.DEBUG)
-
-os.environ['DEPFLOW_CACHE'] = '.depflow-test.sqlite3'
-
-import depflow
+import depflow as _depflow
 from plumbum.cmd import cp, cat, touch, rm, echo
 
 
-def flow():
-    run = [False, False, False]
-
-    @depflow.depends(depflow.file_hash('a.txt'))
-    def process_a():
-        cp('a.txt', 'a')
-        run[0] = True
-
-    @depflow.depends(depflow.nofile('b'))
-    def process_b():
-        touch('b')
-        run[1] = True
-
-    @depflow.depends(process_a, process_b, depflow.file_hash('c.txt'))
-    def process_c():
-        cp('c.txt', 'c')
-        (cat['a', 'b', 'c'] > 'done')()
-        run[2] = True
-
-    return run[0], run[1], run[2]
+logging.basicConfig(level=logging.DEBUG)
 
 
 class TestDepflow(unittest.TestCase):
     def setUp(self):
-        global depflow
-        depflow = reload(depflow)
-
-    def test_missing_all(self):
-        try:
-            a, b, c = flow()
-        except:
-            pass
-
-    def test_missing_some(self):
-        touch('a.txt')
-
-        try:
-            a, b, c = flow()
-        except:
-            pass
-
-    def test_complete(self):
-        touch('a.txt')
-
-        try:
-            a, b, c = flow()
-        except:
-            pass
-
-        touch('c.txt')
-        a, b, c = flow()
-        self.assertFalse(a)
-        self.assertFalse(b)
-        self.assertTrue(c)
-
-    def test_okay(self):
-        touch('a.txt')
-        touch('c.txt')
-
-        a, b, c = flow()
-        self.assertTrue(a)
-        self.assertTrue(b)
-        self.assertTrue(c)
-
-    def test_no_work(self):
-        touch('a.txt')
-        touch('c.txt')
-
-        flow()
-
-        a, b, c = flow()
-        self.assertFalse(a)
-        self.assertFalse(b)
-        self.assertFalse(c)
-
-    def test_rebuild_a(self):
-        touch('a.txt')
-        touch('c.txt')
-
-        flow()
-
-        (echo['junk'] > 'a.txt')()
-        a, b, c = flow()
-        self.assertTrue(a)
-        self.assertFalse(b)
-        self.assertTrue(c)
-
-    def test_no_rebuild_b(self):
-        touch('a.txt')
-        touch('c.txt')
-
-        flow()
-
-        touch('b')
-        a, b, c = flow()
-        self.assertFalse(a)
-        self.assertFalse(b)
-        self.assertFalse(c)
-
-    def test_rebuild_b(self):
-        touch('a.txt')
-        touch('c.txt')
-
-        flow()
-
-        rm('b')
-        a, b, c = flow()
-        self.assertFalse(a)
-        self.assertTrue(b)
-        self.assertTrue(c)
-
-    def test_timestamp_no_rebuild(self):
-        touch('a.txt')
-
-        run = [False]
-
-        @depflow.depends(depflow.file('a.txt'))
-        def update():
-            run[0] = True
-        self.assertTrue(run[0])
-
-        run = [False]
-
-        @depflow.depends(depflow.file('a.txt'))  # noqa
-        def update():
-            run[0] = True
-        self.assertFalse(run[0])
-
-    def test_timestamp_rebuild(self):
-        touch('a.txt')
-
-        @depflow.depends(depflow.file('a.txt'))
-        def update():
-            pass
-        self.assertTrue(update)
-
-        time.sleep(1)
-        touch('a.txt')
-
-        run = [False]
-
-        @depflow.depends(depflow.file('a.txt'))
-        def update():
-            run[0] = True
-        self.assertTrue(run[0])
+        self.depflow = _depflow.Depflow('depflow-test')
 
     def tearDown(self):
         rm('a.txt', retcode=None)
@@ -169,3 +20,176 @@ class TestDepflow(unittest.TestCase):
         rm('c', retcode=None)
         rm('done', retcode=None)
         rm('.depflow-test.sqlite3', retcode=None)
+
+    def flow(self):
+        run = [False, False, False]
+
+        @self.depflow.depends(_depflow.file_hash('a.txt'))
+        def process_a():
+            cp('a.txt', 'a')
+            run[0] = True
+
+        @self.depflow.depends(_depflow.nofile('b'))
+        def process_b():
+            touch('b')
+            run[1] = True
+
+        @self.depflow.depends(
+            process_a, process_b, _depflow.file_hash('c.txt'))
+        def process_c():
+            cp('c.txt', 'c')
+            (cat['a', 'b', 'c'] > 'done')()
+            run[2] = True
+
+        return run[0], run[1], run[2]
+
+    def test_missing_all(self):
+        try:
+            a, b, c = self.flow()
+        except:  # noqa
+            pass
+
+    def test_missing_some(self):
+        touch('a.txt')
+
+        try:
+            a, b, c = self.flow()
+        except:  # noqa
+            pass
+
+    def test_complete(self):
+        touch('a.txt')
+
+        try:
+            a, b, c = self.flow()
+        except:  # noqa
+            pass
+
+        touch('c.txt')
+        a, b, c = self.flow()
+        self.assertFalse(a)
+        self.assertFalse(b)
+        self.assertTrue(c)
+
+    def test_okay(self):
+        touch('a.txt')
+        touch('c.txt')
+
+        a, b, c = self.flow()
+        self.assertTrue(a)
+        self.assertTrue(b)
+        self.assertTrue(c)
+
+    def test_no_work(self):
+        touch('a.txt')
+        touch('c.txt')
+
+        self.flow()
+
+        a, b, c = self.flow()
+        self.assertFalse(a)
+        self.assertFalse(b)
+        self.assertFalse(c)
+
+    def test_rebuild_a(self):
+        touch('a.txt')
+        touch('c.txt')
+
+        self.flow()
+
+        (echo['junk'] > 'a.txt')()
+        a, b, c = self.flow()
+        self.assertTrue(a)
+        self.assertFalse(b)
+        self.assertTrue(c)
+
+    def test_no_rebuild_b(self):
+        touch('a.txt')
+        touch('c.txt')
+
+        self.flow()
+
+        touch('b')
+        a, b, c = self.flow()
+        self.assertFalse(a)
+        self.assertFalse(b)
+        self.assertFalse(c)
+
+    def test_rebuild_b(self):
+        touch('a.txt')
+        touch('c.txt')
+
+        self.flow()
+
+        rm('b')
+        a, b, c = self.flow()
+        self.assertFalse(a)
+        self.assertTrue(b)
+        self.assertTrue(c)
+
+    def test_timestamp_no_rebuild(self):
+        touch('a.txt')
+
+        run = [False]
+
+        @self.depflow.depends(_depflow.file('a.txt'))
+        def update():
+            run[0] = True
+        self.assertTrue(run[0])
+
+        run = [False]
+
+        @self.depflow.depends(_depflow.file('a.txt'))  # noqa
+        def update():
+            run[0] = True
+        self.assertFalse(run[0])
+
+    def test_timestamp_rebuild(self):
+        touch('a.txt')
+
+        @self.depflow.depends(_depflow.file('a.txt'))
+        def update():
+            pass
+        self.assertTrue(update)
+
+        time.sleep(1)
+        touch('a.txt')
+
+        run = [False]
+
+        @self.depflow.depends(_depflow.file('a.txt'))
+        def update():
+            run[0] = True
+        self.assertTrue(run[0])
+
+    def test_unqualified_fail(self):
+        dep = _depflow.file('z.txt')
+
+        run = [False, False]
+        for i in range(2):
+            @self.depflow.depends(dep)
+            def update():
+                run[i] = True
+
+        self.assertTrue(run[0])
+        self.assertFalse(run[1])
+
+    def test_scope(self):
+        run = [False, False]
+        for i in range(2):
+            scope = self.depflow.scope(i)
+
+            @scope.depends()
+            def update():
+                run[i] = True
+
+        self.assertTrue(run[1])
+
+    def test_qualify(self):
+        run = [False, False]
+        for i in range(2):
+            @self.depflow.depends(qualification=(i,))
+            def update():
+                run[i] = True
+
+        self.assertTrue(run[1])
