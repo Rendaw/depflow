@@ -1,6 +1,24 @@
-dependencies:
-  pre:
-    - pip install plumbum==1.6.3
-test:
-  override:
-    - python -m unittest discover
+---
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.6.2-stretch-browsers
+    steps:
+      - checkout
+      - restore_cache:
+          key: justplumbum
+      - run:
+          name: Install Python deps in a venv
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install plumbum==1.6.3
+      - save_cache:
+          key: justplumbum
+          paths:
+            - venv
+      - run:
+          command: |
+            . venv/bin/activate
+            python -m unittest discover
