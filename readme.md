@@ -1,6 +1,15 @@
-[![Build Status](https://circleci.com/gh/rendaw/depflow.svg?style=svg)](https://circleci.com/gh/rendaw/depflow)
-
-[Documentation here](https://rendaw.github.io/depflow/depflow.m.html)
+<table width="100%">
+    <tr>
+        <td>
+            <a href="https://pypi.python.org/pypi/depflow"><img alt="PyPI" src="https://img.shields.io/pypi/v/nine.svg"></a>
+        </td>
+        <td>
+            <a href="https://circleci.com/gh/rendaw/depflow"><img alt="Build Status" src="https://circleci.com/gh/rendaw/depflow.svg?style=svg"></a>
+        </td>
+        <td>
+            <a href="https://rendaw.github.io/depflow/depflow.m.html">Documentation</a>
+        </td>
+</table>
 
 # What is depflow?
 
