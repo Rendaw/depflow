@@ -175,20 +175,24 @@ class TestDepflow(unittest.TestCase):
         self.assertFalse(run[1])
 
     def test_scope(self):
+        dep = _depflow.file('z.txt')
+
         run = [False, False]
         for i in range(2):
             scope = self.depflow.scope(i)
 
-            @scope.depends()
+            @scope.depends(dep)
             def update():
                 run[i] = True
 
         self.assertTrue(run[1])
 
     def test_qualify(self):
+        dep = _depflow.file('z.txt')
+
         run = [False, False]
         for i in range(2):
-            @self.depflow.depends(qualification=(i,))
+            @self.depflow.depends(dep, qualification=(i,))
             def update():
                 run[i] = True
 
