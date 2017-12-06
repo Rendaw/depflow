@@ -1,4 +1,4 @@
-[![Build Status](https://circleci.com/gh/Rendaw/depflow.svg?style=svg)](https://circleci.com/gh/Rendaw/depflow)
+[![Build Status](https://circleci.com/gh/rendaw/depflow.svg?style=svg)](https://circleci.com/gh/rendaw/depflow)
 
 [Documentation here](https://rendaw.github.io/depflow/depflow.m.html)
 
