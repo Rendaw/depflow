@@ -300,10 +300,7 @@ def file(path):
 
     `path` The path of the file.
     '''
-    try:
-        return path, int(os.path.getmtime(path) * 1000)
-    except FileNotFoundError:
-        return path, 0
+    return path, int(os.path.getmtime(path) * 1000)
 
 
 def _update_hash(path, cs):
@@ -325,14 +322,13 @@ def file_hash(path):
     `path` The path of the file.
     '''
     cs = md5()
-    try:
-        _update_hash(path, cs)
-        return path, cs.hexdigest()
-    except FileNotFoundError:
-        return path, 0
+    _update_hash(path, cs)
+    return path, cs.hexdigest()
 
 
 def _tree(path, depth, ignore, start, update, finish):
+    if not os.exists(path):
+        raise FileNotFoundError(path)
     ignore = [
         re.compile(pattern) if isinstance(pattern, str) else pattern
         for pattern in ignore or []
