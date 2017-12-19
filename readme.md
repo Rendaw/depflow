@@ -1,13 +1,16 @@
 <table width="100%">
     <tr>
         <td>
-            <a href="https://pypi.python.org/pypi/depflow"><img alt="PyPI" src="https://img.shields.io/pypi/v/nine.svg"></a>
+            <a href="https://github.com/rendaw/qrcode-generator-es6"><img src="https://raw.githubusercontent.com/primer/octicons/master/lib/svg/mark-github.svg?sanitize=true"> Github</a>
+        </td>
+        <td>
+            <a href="https://pypi.python.org/pypi/depflow"><img alt="PyPI" src="https://img.shields.io/pypi/v/depflow.svg"></a>
         </td>
         <td>
             <a href="https://circleci.com/gh/rendaw/depflow"><img alt="Build Status" src="https://circleci.com/gh/rendaw/depflow.svg?style=svg"></a>
         </td>
         <td>
-            <a href="https://rendaw.github.io/depflow/depflow.m.html">Documentation</a>
+            <a href="https://rendaw.github.io/depflow/depflow.m.html"><img src="https://raw.githubusercontent.com/primer/octicons/master/lib/svg/book.svg?sanitize=true"> Docs</a>
         </td>
 </table>
 
