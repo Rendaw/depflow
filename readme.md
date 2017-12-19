@@ -18,9 +18,9 @@
 
 **depflow** is a tool for process automation.  Set up a process with `flow = depflow.Depflow()` and define dependencies between steps with `@flow.depends`, and steps that are already in the correct state will be skipped.  **depflow** can be used as a build system but it can also be used for deployment, configuring and bringing up systems, and many other use cases.
 
-**depflow**'s strength lies in its flexibility: use `depflow.check` and `depflow.raw_check` to define reusable dependencies on any type of resource - api endpoint output, system calls, process states, docker image hashes, etc.  
+**depflow**'s strength lies in its flexibility: use `depflow.check` and `depflow.raw_check` to define reusable dependencies on any type of resource - api endpoint output, system calls, process states, docker image hashes, etc.
 
-As a word of caution, **depflow** isn't fast and it's only as reliable as your dependency definitions.  If you're building software and need a fast, comprehensive tool I recommend `tup`.  You _can_ use **depflow** to manage other build systems though.
+As a word of caution, **depflow** isn't fast and it's only as reliable as your dependency definitions.  If you're building software and need a fast, comprehensive tool I recommend [tup](https://github.com/gittup/tup).  You _can_ use **depflow** to manage other build systems though.
 
 Here is an example process using Plumbum:
 
