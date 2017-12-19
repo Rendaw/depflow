@@ -1,16 +1,21 @@
 import unittest
 import time
 import logging
-import depflow as _depflow
+import depflow
 from plumbum.cmd import cp, cat, touch, rm, echo
 
 
 logging.basicConfig(level=logging.DEBUG)
 
 
+@depflow.check
+def const():
+    return 'a', 'b'
+
+
 class TestDepflow(unittest.TestCase):
     def setUp(self):
-        self.depflow = _depflow.Depflow('depflow-test')
+        self.df = depflow.Depflow('depflow-test')
 
     def tearDown(self):
         rm('a.txt', retcode=None)
@@ -24,18 +29,17 @@ class TestDepflow(unittest.TestCase):
     def flow(self):
         run = [False, False, False]
 
-        @self.depflow.depends(_depflow.file_hash('a.txt'))
+        @self.df.depends(depflow.file_hash('a.txt'))
         def process_a():
             cp('a.txt', 'a')
             run[0] = True
 
-        @self.depflow.depends(_depflow.nofile('b'))
+        @self.df.depends(depflow.nofile('b'))
         def process_b():
             touch('b')
             run[1] = True
 
-        @self.depflow.depends(
-            process_a, process_b, _depflow.file_hash('c.txt'))
+        @self.df.depends(process_a, process_b, depflow.file_hash('c.txt'))
         def process_c():
             cp('c.txt', 'c')
             (cat['a', 'b', 'c'] > 'done')()
@@ -132,14 +136,14 @@ class TestDepflow(unittest.TestCase):
 
         run = [False]
 
-        @self.depflow.depends(_depflow.file('a.txt'))
+        @self.df.depends(depflow.file('a.txt'))
         def update():
             run[0] = True
         self.assertTrue(run[0])
 
         run = [False]
 
-        @self.depflow.depends(_depflow.file('a.txt'))  # noqa
+        @self.df.depends(depflow.file('a.txt'))  # noqa
         def update():
             run[0] = True
         self.assertFalse(run[0])
@@ -147,7 +151,7 @@ class TestDepflow(unittest.TestCase):
     def test_timestamp_rebuild(self):
         touch('a.txt')
 
-        @self.depflow.depends(_depflow.file('a.txt'))
+        @self.df.depends(depflow.file('a.txt'))
         def update():
             pass
         self.assertTrue(update)
@@ -157,17 +161,17 @@ class TestDepflow(unittest.TestCase):
 
         run = [False]
 
-        @self.depflow.depends(_depflow.file('a.txt'))
+        @self.df.depends(depflow.file('a.txt'))
         def update():
             run[0] = True
         self.assertTrue(run[0])
 
     def test_unqualified_fail(self):
-        dep = _depflow.file('z.txt')
+        dep = const()
 
         run = [False, False]
         for i in range(2):
-            @self.depflow.depends(dep)
+            @self.df.depends(dep)
             def update():
                 run[i] = True
 
@@ -175,11 +179,11 @@ class TestDepflow(unittest.TestCase):
         self.assertFalse(run[1])
 
     def test_scope(self):
-        dep = _depflow.file('z.txt')
+        dep = const()
 
         run = [False, False]
         for i in range(2):
-            scope = self.depflow.scope(i)
+            scope = self.df.scope(i)
 
             @scope.depends(dep)
             def update():
@@ -188,11 +192,11 @@ class TestDepflow(unittest.TestCase):
         self.assertTrue(run[1])
 
     def test_qualify(self):
-        dep = _depflow.file('z.txt')
+        dep = const()
 
         run = [False, False]
         for i in range(2):
-            @self.depflow.depends(dep, qualification=(i,))
+            @self.df.depends(dep, qualification=(i,))
             def update():
                 run[i] = True
 
