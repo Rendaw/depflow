@@ -10,7 +10,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 @depflow.check
 def const():
-    return 'a', 'b'
+    yield 'a'
+    yield 'b'
 
 
 class TestDepflow(unittest.TestCase):
@@ -34,7 +35,7 @@ class TestDepflow(unittest.TestCase):
             cp('a.txt', 'a')
             run[0] = True
 
-        @self.df.depends(depflow.nofile('b'))
+        @self.df.depends(depflow.no_file('b'))
         def process_b():
             touch('b')
             run[1] = True

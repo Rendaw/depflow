@@ -7,7 +7,10 @@ Run
 
 # Defining a process
 
-Instantiate the flow with `flow = depflow.Depflow()`.  Define steps in the process as nullary functions decorated with `@flow.depends(dep1, dep2, ...)`.  Dependencies can either be other steps or checks such as `depflow.file(path)` and `depflow.file_hash(path)`.  Steps are run as they are defined.
+Instantiate the flow with `flow = depflow.Depflow()`.  Define steps in the
+process as nullary functions decorated with `@flow.depends(dep1, dep2, ...)`.
+Dependencies can either be other steps or checks such as `depflow.file(path)`
+and `depflow.file_hash(path)`.  Steps are run as they are defined.
 
 # Creating new checks
 
@@ -15,7 +18,9 @@ Depflow accounts for two different types of dependency checks.
 
 ### Cached checks
 
-Use `@depflow.check` to decorate a function that returns a value representing the state of some resource, where a dependent step only needs to be updated if the state of the resource changes.
+Use `@depflow.check` to decorate a function that returns a value representing
+the state of some resource, where a dependent step only needs to be updated if
+the state of the resource changes.
 
 Example:
 
@@ -45,11 +50,13 @@ or to account for command line arguments:
     def step_b():
         build_file('b.dat', args.output_dir, author='system')
 
-Cached state is stored and compared based on a unique id generated from the first return value, the step name and the ids of its other dependencies.
+Cached state is stored and compared based on a unique id generated from the
+first return value, the step name and the ids of its other dependencies.
 
 ### Uncached checks
 
-Use `@depflow.raw_check` to decorate a function that returns a boolean indicating that the dependent step needs to be updated.
+Use `@depflow.raw_check` to decorate a function that returns a boolean
+indicating that the dependent step needs to be updated.
 
 Example:
 
@@ -112,7 +119,7 @@ class Dependency(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def changed(self, step):
+    def dirty(self, step):
         '''
         Return true if the current state of this dependency does not
         match the previous state of the dependency relative to the step.
@@ -120,7 +127,7 @@ class Dependency(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def commit_changed(self, step):
+    def commit(self, step):
         '''
         Persist the new state of this dependency relative to the step.
         '''
@@ -135,27 +142,30 @@ class Step(Dependency):
             function.__name__,
             tuple(node.unique(depflow) for node in nodes)
         )
-        self._changed = any(node.changed(self) for node in nodes)
+        self._changed = any(node.dirty(self) for node in nodes)
         if self._changed:
             depflow._logger.info('Running {}'.format(function.__name__))
             function()
             self._invocation = (int(time.time() * 1000), _random.random())
             depflow._db_set(self._unique, self._invocation)
             for node in nodes:
-                node.commit_changed(self)
+                node.commit(self)
         else:
             self._invocation = depflow._db_get(self._unique)
 
     def unique(self, depflow):
         return self._unique
 
-    def changed(self, step):
-        return (
+    def dirty(self, step):
+        changed = (
             self.depflow._db_get((self._unique, step.unique(self.depflow))) !=
             self._invocation
         )
+        step.depflow._logger.info('Step dep: {}{}'.format(
+            step.unique(step.depflow), ' (DIRTY)' if changed else ''))
+        return changed
 
-    def commit_changed(self, step):
+    def commit(self, step):
         self.depflow._db_set(
             (self._unique, step.unique(self.depflow)),
             self._invocation
@@ -237,12 +247,9 @@ class Depflow(object):
         return Scope(self, qualification)
 
 
-_UNEVALUATED = ()
-
-
 def check(function):
     '''
-    Converts a function that returns a (key, value) into a Dependency.
+    Converts a function that yields a `key` then `value` into a Dependency.
 
     The key is a unique id for the object being checked.  It is composed
     from tuples and primitives.
@@ -257,32 +264,34 @@ def check(function):
     '''
     @wraps(function)
     def inner(*pargs, **kwargs):
+        g = function(*pargs, **kwargs)
+
         class _Check(Dependency):
             def __init__(self):
-                self.k = _UNEVALUATED
+                self.k = (function.__name__,) + _coerce_tuple(next(g))
                 self.v = None
 
             def evaluate(self, depflow):
-                if self.k is not _UNEVALUATED:
-                    return
-                self.k, self.v = function(*pargs, **kwargs)
-                self.k = (function.__name__,) + _coerce_tuple(self.k)
-                depflow._logger.debug(
-                    'Cached check: {}, {}'.format(self.k, self.v))
+                try:
+                    self.v = next(g)
+                except StopIteration:
+                    pass
 
             def unique(self, depflow):
-                self.evaluate(depflow)
                 return self.k
 
-            def changed(self, step):
+            def dirty(self, step):
                 self.evaluate(step.depflow)
                 k = (self.k, step.unique(step.depflow))
                 v_old = step.depflow._db_get(k)
-                if self.v == v_old:
+                same = self.v == v_old
+                step.depflow._logger.debug('Cached check: {}, {}{}'.format(
+                    self.k, self.v, ' (DIRTY)' if same else ''))
+                if same:
                     return False
                 return True
 
-            def commit_changed(self, step):
+            def commit(self, step):
                 self.evaluate(step.depflow)
                 k = (self.k, step.unique(step.depflow))
                 step.depflow._db_set(k, self.v)
@@ -300,7 +309,8 @@ def file(path):
 
     `path` The path of the file.
     '''
-    return path, int(os.path.getmtime(path) * 1000)
+    yield path
+    yield int(os.path.getmtime(path) * 1000)
 
 
 def _update_hash(path, cs):
@@ -321,13 +331,15 @@ def file_hash(path):
 
     `path` The path of the file.
     '''
+    yield path
     cs = md5()
     _update_hash(path, cs)
-    return path, cs.hexdigest()
+    yield cs.hexdigest()
 
 
 def _tree(path, depth, ignore, start, update, finish):
-    if not os.exists(path):
+    yield (path, depth)
+    if not os.path.exists(path):
         raise FileNotFoundError(path)
     ignore = [
         re.compile(pattern) if isinstance(pattern, str) else pattern
@@ -344,7 +356,7 @@ def _tree(path, depth, ignore, start, update, finish):
             if any(pattern.search(full_file) for pattern in ignore):
                 continue
             state = update(state, full_file)
-    return (path, depth), finish(state)
+    yield finish(state)
 
 
 @check
@@ -356,12 +368,13 @@ def tree(path, depth=0, ignore=None):
 
     `path` is the path of the root of the tree.
 
-    (opt) `depth` indicates how many levels to descend into the path. 0 is unlimited,
-    1 is only the specified directory itself, 2 would include the first
-    children, etc.
+    (opt) `depth` indicates how many levels to descend into the path. 0 is
+    unlimited, 1 is only the specified directory itself, 2 would include the
+    first children, etc.
 
-    (opt) `ignore` is a list of file and directory patterns to ignore.  Each pattern
-    is a compiled regex applied against the file path from the tree root.
+    (opt) `ignore` is a list of file and directory patterns to ignore.  Each
+    pattern is a compiled regex applied against the file path from the tree
+    root.
     '''
     return _tree(
         path,
@@ -382,12 +395,13 @@ def tree_hash(path, depth=0, ignore=None):
 
     `path` is the path of the root of the tree.
 
-    (opt) `depth` indicates how many levels to descend into the path. 0 is unlimited,
-    1 is only the specified directory itself, 2 would include the first
-    children, etc.
+    (opt) `depth` indicates how many levels to descend into the path. 0 is
+    unlimited, 1 is only the specified directory itself, 2 would include the
+    first children, etc.
 
-    (opt) `ignore` is a list of file and directory patterns to ignore.  Each pattern
-    is a compiled regex applied against the file path from the tree root.
+    (opt) `ignore` is a list of file and directory patterns to ignore.  Each
+    pattern is a compiled regex applied against the file path from the tree
+    root.
     '''
     return _tree(
         path,
@@ -401,8 +415,8 @@ def tree_hash(path, depth=0, ignore=None):
 
 def raw_check(function):
     '''
-    Decorator that converts a function that returns a `(key, value)` into a
-    dependency.
+    Decorator that converts a function that yields a `key` then a `value` into
+    a dependency.
 
     The `key` is a unique id for the object being checked.  It is composed
     from tuples and primitives.
@@ -415,38 +429,37 @@ def raw_check(function):
     '''
     @wraps(function)
     def inner(*pargs, **kwargs):
+        g = function(*pargs, **kwargs)
 
         class _Check(Dependency):
             def __init__(self):
-                self.k = _UNEVALUATED
+                self.k = (function.__name__,) + _coerce_tuple(next(g))
                 self.v = None
 
             def evaluate(self, depflow):
-                if self.k is not _UNEVALUATED:
-                    return
-                self.k, self.v = function(*pargs, **kwargs)
-                self.k = (function.__name__,) + _coerce_tuple(self.k)
-                depflow._logger.debug(
-                    'Raw check: {}, {}'.format(self.k, self.v))
+                try:
+                    self.v = next(g)
+                except StopIteration:
+                    pass
 
             def unique(self, depflow):
-                self.evaluate(depflow)
                 return self.k
 
-            def changed(self, step):
+            def dirty(self, step):
                 self.evaluate(step.depflow)
+                step.depflow._logger.debug('Raw check: {}, {}{}'.format(
+                    self.k, self.v, ' (DIRTY)' if self.v else ''))
                 return self.v
 
-            def commit_changed(self, step):
+            def commit(self, step):
                 self.evaluate(step.depflow)
-                pass
 
         return _Check()
     return inner
 
 
 @raw_check
-def nofile(path):
+def no_file(path):
     '''
     Run the step if the specified file doesn't exist.
 
@@ -454,7 +467,8 @@ def nofile(path):
 
     `path` is the path of the file.
     '''
-    return path, not os.path.exists(path)
+    yield path
+    yield not os.path.exists(path)
 
 
 __all__ = (
@@ -463,5 +477,5 @@ __all__ = (
     'raw_check',
     'file', 'file_hash',
     'tree', 'tree_hash',
-    'nofile',
+    'no_file',
 )
