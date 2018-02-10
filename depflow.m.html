@@ -1055,7 +1055,7 @@ table {
     <li class="mono"><a href="#depflow.check">check</a></li>
     <li class="mono"><a href="#depflow.file">file</a></li>
     <li class="mono"><a href="#depflow.file_hash">file_hash</a></li>
-    <li class="mono"><a href="#depflow.nofile">nofile</a></li>
+    <li class="mono"><a href="#depflow.no_file">no_file</a></li>
     <li class="mono"><a href="#depflow.raw_check">raw_check</a></li>
     <li class="mono"><a href="#depflow.tree">tree</a></li>
     <li class="mono"><a href="#depflow.tree_hash">tree_hash</a></li>
@@ -1098,11 +1098,16 @@ table {
 
 
 <h1>Defining a process</h1>
-<p>Instantiate the flow with <code>flow = depflow.Depflow()</code>.  Define steps in the process as nullary functions decorated with <code>@flow.depends(dep1, dep2, ...)</code>.  Dependencies can either be other steps or checks such as <code>depflow.file(path)</code> and <code>depflow.file_hash(path)</code>.  Steps are run as they are defined.</p>
+<p>Instantiate the flow with <code>flow = depflow.Depflow()</code>.  Define steps in the
+process as nullary functions decorated with <code>@flow.depends(dep1, dep2, ...)</code>.
+Dependencies can either be other steps or checks such as <code>depflow.file(path)</code>
+and <code>depflow.file_hash(path)</code>.  Steps are run as they are defined.</p>
 <h1>Creating new checks</h1>
 <p>Depflow accounts for two different types of dependency checks.</p>
 <h3>Cached checks</h3>
-<p>Use <code>@depflow.check</code> to decorate a function that returns a value representing the state of some resource, where a dependent step only needs to be updated if the state of the resource changes.</p>
+<p>Use <code>@depflow.check</code> to decorate a function that returns a value representing
+the state of some resource, where a dependent step only needs to be updated if
+the state of the resource changes.</p>
 <p>Example:</p>
 <div class="codehilite"><pre><span></span>@depflow.check
 def kernel_version():
@@ -1133,9 +1138,11 @@ def step_b():
 </pre></div>
 
 
-<p>Cached state is stored and compared based on a unique id generated from the first return value, the step name and the ids of its other dependencies.</p>
+<p>Cached state is stored and compared based on a unique id generated from the
+first return value, the step name and the ids of its other dependencies.</p>
 <h3>Uncached checks</h3>
-<p>Use <code>@depflow.raw_check</code> to decorate a function that returns a boolean indicating that the dependent step needs to be updated.</p>
+<p>Use <code>@depflow.raw_check</code> to decorate a function that returns a boolean
+indicating that the dependent step needs to be updated.</p>
 <p>Example:</p>
 <div class="codehilite"><pre><span></span>flow = depflow.Depflow()
 
@@ -1163,7 +1170,7 @@ def server1_up():
 
     
   
-    <div class="desc"><p>Converts a function that returns a (key, value) into a Dependency.</p>
+    <div class="desc"><p>Converts a function that yields a <code>key</code> then <code>value</code> into a Dependency.</p>
 <p>The key is a unique id for the object being checked.  It is composed
 from tuples and primitives.</p>
 <p>The value represents the state of the object.  It is composed from tuples
@@ -1212,8 +1219,8 @@ the dependant method will run.</p>
   
       
   <div class="item">
-    <div class="name def" id="depflow.nofile">
-    <p>def <span class="ident">nofile</span>(</p><p>*pargs, **kwargs)</p>
+    <div class="name def" id="depflow.no_file">
+    <p>def <span class="ident">no_file</span>(</p><p>*pargs, **kwargs)</p>
     </div>
     
 
@@ -1236,8 +1243,8 @@ the dependant method will run.</p>
 
     
   
-    <div class="desc"><p>Decorator that converts a function that returns a <code>(key, value)</code> into a
-dependency.</p>
+    <div class="desc"><p>Decorator that converts a function that yields a <code>key</code> then a <code>value</code> into
+a dependency.</p>
 <p>The <code>key</code> is a unique id for the object being checked.  It is composed
 from tuples and primitives.</p>
 <p>The <code>value</code> is True if the dependent should be updated, False otherwise.</p>
@@ -1260,11 +1267,12 @@ from tuples and primitives.</p>
     <div class="desc"><p>Check for changes in a file tree by timestamp.</p>
 <h3>Arguments</h3>
 <p><code>path</code> is the path of the root of the tree.</p>
-<p>(opt) <code>depth</code> indicates how many levels to descend into the path. 0 is unlimited,
-1 is only the specified directory itself, 2 would include the first
-children, etc.</p>
-<p>(opt) <code>ignore</code> is a list of file and directory patterns to ignore.  Each pattern
-is a compiled regex applied against the file path from the tree root.</p></div>
+<p>(opt) <code>depth</code> indicates how many levels to descend into the path. 0 is
+unlimited, 1 is only the specified directory itself, 2 would include the
+first children, etc.</p>
+<p>(opt) <code>ignore</code> is a list of file and directory patterns to ignore.  Each
+pattern is a compiled regex applied against the file path from the tree
+root.</p></div>
   <div class="source_cont">
 </div>
 
@@ -1282,11 +1290,12 @@ is a compiled regex applied against the file path from the tree root.</p></div>
     <div class="desc"><p>Check for changes in a file tree by hash.</p>
 <h3>Arguments</h3>
 <p><code>path</code> is the path of the root of the tree.</p>
-<p>(opt) <code>depth</code> indicates how many levels to descend into the path. 0 is unlimited,
-1 is only the specified directory itself, 2 would include the first
-children, etc.</p>
-<p>(opt) <code>ignore</code> is a list of file and directory patterns to ignore.  Each pattern
-is a compiled regex applied against the file path from the tree root.</p></div>
+<p>(opt) <code>depth</code> indicates how many levels to descend into the path. 0 is
+unlimited, 1 is only the specified directory itself, 2 would include the
+first children, etc.</p>
+<p>(opt) <code>ignore</code> is a list of file and directory patterns to ignore.  Each
+pattern is a compiled regex applied against the file path from the tree
+root.</p></div>
   <div class="source_cont">
 </div>
 
