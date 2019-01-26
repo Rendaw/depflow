@@ -151,6 +151,9 @@ class Step(Dependency):
             for node in nodes:
                 node.commit(self)
         else:
+            depflow._logger.debug(
+                '{} dependencies unchanged, not running'.format(
+                    function.__name__))
             self._invocation = depflow._db_get(self._unique)
 
     def unique(self, depflow):
@@ -285,8 +288,12 @@ def check(function):
                 k = (self.k, step.unique(step.depflow))
                 v_old = step.depflow._db_get(k)
                 same = self.v == v_old
-                step.depflow._logger.debug('Cached check: {}, {}{}'.format(
-                    self.k, self.v, ' (DIRTY)' if same else ''))
+                step.depflow._logger.debug(
+                    'Cached check: {}, {} == {}{}'.format(
+                        self.k,
+                        self.v,
+                        v_old,
+                        ' (DIRTY)' if not same else ''))
                 if same:
                     return False
                 return True
@@ -314,12 +321,14 @@ def file(path):
 
 
 def _update_hash(path, cs):
+    cs.update(path.encode('utf-8'))
     with open(path, 'rb') as source:
         while True:
             data = source.read(4096)
             if not data:
                 break
             cs.update(data)
+    return cs
 
 
 @check
@@ -338,7 +347,6 @@ def file_hash(path):
 
 
 def _tree(path, depth, ignore, start, update, finish):
-    yield (path, depth)
     if not os.path.exists(path):
         raise FileNotFoundError(path)
     ignore = [
@@ -356,7 +364,18 @@ def _tree(path, depth, ignore, start, update, finish):
             if any(pattern.search(full_file) for pattern in ignore):
                 continue
             state = update(state, full_file)
-    yield finish(state)
+    return finish(state)
+
+
+def calc_tree_time(path, depth=0, ignore=None):
+    return _tree(
+        path,
+        depth,
+        ignore,
+        lambda: 0,
+        lambda state, path: state + os.path.getmtime(path),
+        lambda state: state,
+    )
 
 
 @check
@@ -376,13 +395,18 @@ def tree(path, depth=0, ignore=None):
     pattern is a compiled regex applied against the file path from the tree
     root.
     '''
+    yield (path, depth)
+    yield calc_tree_time(path, depth, ignore)
+
+
+def calc_tree_hash(path, depth=0, ignore=None):
     return _tree(
         path,
         depth,
         ignore,
-        lambda: 0,
-        lambda state, path: state + os.path.getmtime(path),
-        lambda state: state,
+        lambda: md5(),
+        lambda state, path: _update_hash(path, state),
+        lambda state: state.hexdigest(),
     )
 
 
@@ -403,14 +427,8 @@ def tree_hash(path, depth=0, ignore=None):
     pattern is a compiled regex applied against the file path from the tree
     root.
     '''
-    return _tree(
-        path,
-        depth,
-        ignore,
-        lambda: md5(),
-        lambda state, path: _update_hash(path, state),
-        lambda state: state.hexdigest(),
-    )
+    yield (path, depth)
+    yield calc_tree_hash(path, depth, ignore)
 
 
 def raw_check(function):

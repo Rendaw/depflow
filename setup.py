@@ -1,10 +1,13 @@
 from setuptools import setup
 
+READ_name = 'depflow'
+GEN_version = '0.0.6'
+
 setup(
-    name='depflow',
-    version='0.0.6',
+    name=READ_name,
+    version=GEN_version,
     author='rendaw',
-    url='https://github.com/rendaw/depflow',
+    url='https://gitlab.com/rendaw/depflow',
     license='BSD',
     py_modules=['depflow'],
 )
