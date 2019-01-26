@@ -489,6 +489,20 @@ def no_file(path):
     yield not os.path.exists(path)
 
 
+@check
+def const(key, value):
+    '''
+    Run the step if value is changed in the source.
+
+    ### Arguments
+
+    `key` see `key` in @check
+    `value` see `value` in @check
+    '''
+    yield ('const', key)
+    yield value
+
+
 __all__ = (
     'Depflow',
     'check',
